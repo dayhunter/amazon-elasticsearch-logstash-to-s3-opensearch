@@ -1,4 +1,4 @@
-# Migrate data Elasticsearch to S3 and Amazon OpenSearch Service with Logstash
+# Migrate data from Elasticsearch to Amazon S3 and Amazon OpenSearch Service with Logstash
 
 In this project, we will demontrate how to migrate data from Elasticseach v7.10 to Amazon S3 and Amazon OpenSearch Service v1.3
 
