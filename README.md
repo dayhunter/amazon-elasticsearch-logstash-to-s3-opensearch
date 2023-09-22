@@ -394,6 +394,8 @@ By using `Dev Tools`, You can check the result by query from `index` that you ha
 
 - [Install logstash opensearch plugin](https://forum.opensearch.org/t/logstash-v8-1-1-compatibility-with-opensearch/9095/9)
 
+- [Logstash Output OpenSearch](https://github.com/opensearch-project/logstash-output-opensearch)
+
 - [Troubleshooting: Logstash warning Opensearch unreachable](https://stackoverflow.com/questions/75598950/logstash-warning-opensearch-unreachable)
 
 ---
