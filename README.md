@@ -1,6 +1,10 @@
 # Migrate data from Elasticsearch to Amazon S3 and Amazon OpenSearch Service with Logstash
 
-In this project, we will demontrate how to migrate data from Elasticseach v7.10 to Amazon S3 and Amazon OpenSearch Service v1.3
+In this project, we will demontrate 
+
+1) How to migrate data from Elasticseach v7.10 to Amazon S3 and Amazon OpenSearch Service v1.3
+
+2) How to migrate Load balancer access log on S3 to Elasticsearch v7.10
 
 ## Prerequisite
 1. Elasticsearch v7.10
@@ -9,7 +13,7 @@ In this project, we will demontrate how to migrate data from Elasticseach v7.10 
 
 ---
 
-## Note
+## 1. How to migrate data from Elasticseach v7.10 to Amazon S3 and Amazon OpenSearch Service v1.3
 
 For testing purpose,
 
@@ -399,3 +403,86 @@ By using `Dev Tools`, You can check the result by query from `index` that you ha
 - [Troubleshooting: Logstash warning Opensearch unreachable](https://stackoverflow.com/questions/75598950/logstash-warning-opensearch-unreachable)
 
 ---
+
+## 2. How to migrate Load balancer access log on S3 to Elasticsearch v7.10
+
+Input logstash configuration to this file.
+
+```
+input {
+     s3 {
+         bucket => "<S3_BUCKET>"
+         region => "<S3_BUCKET_REGION>"
+         prefix => "<PREFIX>"
+         add_field => {
+              "doctype" => "aws-application-load-balancer"
+          }
+     }
+  }
+filter {
+      if [doctype] == "aws-application-load-balancer" or [log_format] == "aws-application-load-balancer" {
+          grok {
+              match => [ "message", '%{NOTSPACE:request_type} %{TIMESTAMP_ISO8601:log_timestamp} %{NOTSPACE:alb-name} %{NOTSPACE:client} %{NOTSPACE:target} %{NOTSPACE:request_processing_time:float} %{NOTSPACE:target_processing_time:float} %{NOTSPACE:response_processing_time:float} %{NOTSPACE:elb_status_code} %{NOTSPACE:target_status_code:int} %{NOTSPACE:received_bytes:float} %{NOTSPACE:sent_bytes:float} %{QUOTEDSTRING:request} %{QUOTEDSTRING:user_agent} %{NOTSPACE:ssl_cipher} %{NOTSPACE:ssl_protocol} %{NOTSPACE:target_group_arn} %{QUOTEDSTRING:trace_id} "%{DATA:domain_name}" "%{DATA:chosen_cert_arn}" %{NUMBER:matched_rule_priority:int} %{TIMESTAMP_ISO8601:request_creation_time} "%{DATA:actions_executed}" "%{DATA:redirect_url}" "%{DATA:error_reason}"']
+          }
+          date {
+              match => [ "log_timestamp", "ISO8601" ]
+          }
+          mutate {
+              gsub => [
+                  "request", '"', "",
+                  "trace_id", '"', "",
+                  "user_agent", '"', ""
+              ]
+          }
+          if [request] {
+              grok {
+                  match => ["request", "(%{NOTSPACE:http_method})? (%{NOTSPACE:http_uri})? (%{NOTSPACE:http_version})?"]
+              }
+          }
+          if [http_uri] {
+              grok {
+                  match => ["http_uri", "(%{WORD:protocol})?(://)?(%{IPORHOST:domain})?(:)?(%{INT:http_port})?(%{GREEDYDATA:request_uri})?"]
+              }
+          }
+          if [client] {
+              grok {
+                  match => ["client", "(%{IPORHOST:c_ip})?"]
+              }
+          }
+          if [target_group_arn] {
+              grok {
+                  match => [ "target_group_arn", "arn:aws:%{NOTSPACE:tg-arn_type}:%{NOTSPACE:tg-arn_region}:%{NOTSPACE:tg-arn_aws_account_id}:targetgroup\/%{NOTSPACE:tg-arn_target_group_name}\/%{NOTSPACE:tg-arn_target_group_id}" ]
+              }
+          }
+          if [c_ip] {
+              geoip {
+                  source => "c_ip"
+                  target => "geoip"
+              }
+          }
+          if [user_agent] {
+              useragent {
+                  source => "user_agent"
+                  prefix => "ua_"
+              }
+          }
+      }
+  }
+output {
+      elasticsearch {
+          hosts => [ "<ES_DOMAIN_ENDPOINT>:443" ]
+          index => "alb-index-name"
+          user => "<ES_USERNAME>"
+          password => "<ES_PASSWORD>"
+          ilm_enabled => false
+     }
+  }
+```
+
+---
+
+## References
+
+- [ALB Access logs in Elasticsearch](https://medium.com/@sameera.godakanda/alb-access-logs-in-elasticsearch-69b1acaa6b55)
+
+- [Issue in dumping Data in AWS Elasticsearch using Logstash](https://aliartiza75.medium.com/issue-dumping-data-in-aws-elasticsearch-using-logstash-c9ef5383009c)
